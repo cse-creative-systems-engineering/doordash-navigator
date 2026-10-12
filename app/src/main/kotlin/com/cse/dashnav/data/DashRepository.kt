@@ -9,12 +9,14 @@ import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import java.time.ZoneId
 
+/** Totals cover finished dashes only; the UI adds the live dash so the list doesn't re-read points every fix. */
 data class DaySummary(
     val date: LocalDate,
     val dashCount: Int,
-    val distanceMeters: Double,
-    val activeMs: Long,
-    val inProgress: Boolean,
+    val finishedDistanceMeters: Double,
+    val finishedActiveMs: Long,
+    /** Start time of the dash still in progress on this day, if any. */
+    val activeDashStartMs: Long?,
 )
 
 data class DashTrack(val dash: DashEntity, val track: FilteredTrack)
@@ -89,12 +91,13 @@ class DashRepository(private val dao: DashDao) {
     suspend fun summarize(dashes: List<DashEntity>, cutoffHour: Int): List<DaySummary> =
         dashes.groupBy { it.workDay(cutoffHour) }
             .map { (date, dayDashes) ->
+                val finished = dayDashes.filter { it.endTimeMs != null }
                 DaySummary(
                     date = date,
                     dashCount = dayDashes.size,
-                    distanceMeters = dayDashes.sumOf { distanceMeters(it) },
-                    activeMs = dayDashes.sumOf { (it.endTimeMs ?: System.currentTimeMillis()) - it.startTimeMs },
-                    inProgress = dayDashes.any { it.endTimeMs == null },
+                    finishedDistanceMeters = finished.sumOf { distanceMeters(it) },
+                    finishedActiveMs = finished.sumOf { it.endTimeMs!! - it.startTimeMs },
+                    activeDashStartMs = dayDashes.firstOrNull { it.endTimeMs == null }?.startTimeMs,
                 )
             }
             .sortedByDescending { it.date }

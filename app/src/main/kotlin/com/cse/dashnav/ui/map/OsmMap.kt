@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -56,7 +57,8 @@ fun rememberMapView(): MapView {
 
 @Composable
 fun MapBox(mapView: MapView, modifier: Modifier = Modifier) {
-    AndroidView(factory = { mapView }, modifier = modifier)
+    // osmdroid draws tiles past its own bounds unless clipped.
+    AndroidView(factory = { mapView }, modifier = modifier.clipToBounds())
 }
 
 fun TrackPoint.toGeoPoint() = GeoPoint(lat, lon)

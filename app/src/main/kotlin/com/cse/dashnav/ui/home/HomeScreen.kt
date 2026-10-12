@@ -106,7 +106,7 @@ fun HomeScreen(onOpenDay: (LocalDate) -> Unit, onOpenSettings: () -> Unit) {
             if (days.isEmpty()) {
                 item { Text("No dashes yet. Start one above.", style = MaterialTheme.typography.bodyMedium) }
             }
-            items(days, key = { it.date.toString() }) { day -> DayRow(day, onClick = { onOpenDay(day.date) }) }
+            items(days, key = { it.date.toString() }) { day -> DayRow(day, live, onClick = { onOpenDay(day.date) }) }
         }
     }
 }
@@ -136,12 +136,7 @@ private fun DashCard(live: LiveStats?) {
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                 ) { Text("Start dash", style = MaterialTheme.typography.titleMedium) }
             } else {
-                val now by produceState(System.currentTimeMillis()) {
-                    while (true) {
-                        value = System.currentTimeMillis()
-                        delay(1_000)
-                    }
-                }
+                val now by rememberClock()
                 Text("Dashing · ${Format.duration(now - live.startTimeMs)}", style = MaterialTheme.typography.titleLarge)
                 Text(Format.miles(live.distanceMeters), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                 val accuracy = live.lastAccuracyM?.let { if (it > 1_000f) "no fix" else "±${it.toInt()} m" } ?: "waiting for GPS"
@@ -225,17 +220,34 @@ private fun SetupRow(title: String, detail: String, onFix: () -> Unit) {
     }
 }
 
+/** Current time, ticking once a second. */
 @Composable
-private fun DayRow(day: DaySummary, onClick: () -> Unit) {
+private fun rememberClock() = produceState(System.currentTimeMillis()) {
+    while (true) {
+        value = System.currentTimeMillis()
+        delay(1_000)
+    }
+}
+
+@Composable
+private fun DayRow(day: DaySummary, live: LiveStats?, onClick: () -> Unit) {
+    var meters = day.finishedDistanceMeters
+    var activeMs = day.finishedActiveMs
+    val activeStart = day.activeDashStartMs
+    if (activeStart != null) {
+        val now by rememberClock()
+        activeMs += now - activeStart
+        if (live?.startTimeMs == activeStart) meters += live.distanceMeters
+    }
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(Format.day(day.date), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text(Format.miles(day.distanceMeters), style = MaterialTheme.typography.titleMedium)
+            Text(Format.miles(meters), style = MaterialTheme.typography.titleMedium)
         }
         val dashes = if (day.dashCount == 1) "1 dash" else "${day.dashCount} dashes"
-        val status = if (day.inProgress) " · in progress" else ""
+        val status = if (activeStart != null) " · in progress" else ""
         Text(
-            "$dashes · ${Format.duration(day.activeMs)}$status",
+            "$dashes · ${Format.duration(activeMs)}$status",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
